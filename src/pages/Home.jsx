@@ -34,7 +34,7 @@ const EnrollmentForm = ({ team, onGoBack }) => {
     sala: "",
     turno: "",
     anoEscolar: "",
-    horarioTreino: "",
+    horarioTreino: "Contraturno",
     problemaSaude: "",
     time: team.name,
   });
@@ -60,7 +60,7 @@ const EnrollmentForm = ({ team, onGoBack }) => {
         sala: "",
         turno: "",
         anoEscolar: "",
-        horarioTreino: "",
+        horarioTreino: "Contraturno",
         problemaSaude: "",
         time: team.name,
       });
@@ -188,9 +188,8 @@ const EnrollmentForm = ({ team, onGoBack }) => {
               name="horarioTreino"
               value={formData.horarioTreino}
               onChange={handleChange}
-              required
             >
-              <option value="">Contraturno</option>
+              <option value="Contraturno">Contraturno</option>
             </select>
           </div>
         </div>
