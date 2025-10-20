@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../firebase.js"; // pega seu arquivo firebase.js
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
 
 // Dados dos times
 const teams = [
@@ -25,7 +25,7 @@ const teams = [
 ];
 
 // Componente do Formulário de Inscrição
-const EnrollmentForm = ({ team, onGoBack }) => {
+const EnrollmentForm = ({ team, onGoBack, onSubscriptionSuccess }) => {
   const [formData, setFormData] = useState({
     nomeCompleto: "",
     dataNascimento: "",
@@ -46,12 +46,33 @@ const EnrollmentForm = ({ team, onGoBack }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check for existing subscription with same phone number and team
+    const q = query(
+      collection(db, "inscricoes"),
+      where("numeroTelefone", "==", formData.numeroTelefone),
+      where("time", "==", formData.time)
+    );
+
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      alert("Você já está inscrito nesta modalidade!");
+      return;
+    }
+
     try {
       await addDoc(collection(db, "inscricoes"), {
         ...formData,
         dataEnvio: new Date(),
       });
-      console.log("Formulário enviado com sucesso!");
+
+      // Call parent component's success handler with subscription data
+      onSubscriptionSuccess({
+        time: formData.time,
+        sport: team.sport,
+        icon: team.icon,
+        color: team.color,
+      });
       setFormData({
         nomeCompleto: "",
         dataNascimento: "",
@@ -75,12 +96,7 @@ const EnrollmentForm = ({ team, onGoBack }) => {
         <div className="header-info">
           <i className={team.icon} style={{ color: team.color }}></i>
           <h2>Inscrição - {team.name}</h2>
-        </div>
-        <div className="team-info">
-          <span>
-            {team.name} - {team.sport}
-          </span>
-          <i className={team.icon} style={{ color: team.color }}></i>
+          <p className="opacity-75">{team.sport}</p>
         </div>
       </div>
       <form onSubmit={handleSubmit}>
@@ -155,7 +171,7 @@ const EnrollmentForm = ({ team, onGoBack }) => {
             />
           </div>
           <div className="form-group">
-            <label htmlFor="turno">Turno</label>
+            <label htmlFor="turno">Turno que estuda</label>
             <select
               id="turno"
               name="turno"
@@ -194,12 +210,32 @@ const EnrollmentForm = ({ team, onGoBack }) => {
           </div>
         </div>
 
+        <div className="form-disclaimer">
+          <div className="disclaimer-icon">
+            <i className="fas fa-info-circle"></i>
+          </div>
+          <div className="disclaimer-content">
+            <p>
+              <strong>Aviso Importante</strong>
+            </p>
+            <ul>
+              <li>
+                Podemos entrar em contato para confirmar ou esclarecer
+                informações do seu cadastro.
+              </li>
+              <li>
+                Certifique-se de que todos os dados fornecidos estão corretos.
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <div className="form-actions">
           <button type="button" onClick={onGoBack} className="back-button">
             Voltar
           </button>
           <button type="submit" className="submit-button">
-            Enviar Inscrição
+            Confirmar Inscrição
           </button>
         </div>
       </form>
@@ -209,18 +245,71 @@ const EnrollmentForm = ({ team, onGoBack }) => {
 
 // Componente Principal
 function Home() {
+  const [isLoading, setIsLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [lastSubscriptionTime, setLastSubscriptionTime] = useState(null);
+  const [timeLeft, setTimeLeft] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
+  // Initialize the end time in localStorage if it doesn't exist
+  useEffect(() => {
+    if (!localStorage.getItem("registrationEndTime")) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 5);
+      localStorage.setItem("registrationEndTime", endDate.getTime().toString());
+    }
+  }, []);
 
   useEffect(() => {
+    // Check if all assets are loaded
+    const handleLoad = () => {
+      setIsLoading(false);
+    };
+
+    // Check if page is already loaded
+    if (document.readyState === "complete") {
+      setIsLoading(false);
+    } else {
+      window.addEventListener("load", handleLoad);
+    }
+
     const introTimeout = setTimeout(() => {
       setShowIntro(false);
     }, 4000);
 
-    return () => clearTimeout(introTimeout);
+    return () => {
+      window.removeEventListener("load", handleLoad);
+      clearTimeout(introTimeout);
+    };
   }, []);
 
   const handleCardClick = (team) => {
+    // Check if user has a recent subscription (within 2 hours)
+    if (lastSubscriptionTime) {
+      const twoHoursInMs = 2 * 60 * 60 * 1000;
+      const timeSinceLastSubscription =
+        new Date() - new Date(lastSubscriptionTime);
+
+      if (timeSinceLastSubscription < twoHoursInMs) {
+        const timeLeftMs = twoHoursInMs - timeSinceLastSubscription;
+        const hoursLeft = Math.floor(timeLeftMs / (1000 * 60 * 60));
+        const minutesLeft = Math.ceil(
+          (timeLeftMs % (1000 * 60 * 60)) / (1000 * 60)
+        );
+
+        alert(
+          `Aguarde ${hoursLeft}h ${minutesLeft}m antes de fazer uma nova inscrição.`
+        );
+        return;
+      }
+    }
+
     setSelectedTeam(team);
   };
 
@@ -228,8 +317,149 @@ function Home() {
     setSelectedTeam(null);
   };
 
+  // Countdown Timer component
+  useEffect(() => {
+    // Check if we have a stored end time, if not, set one
+    if (!localStorage.getItem("registrationEndTime")) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 5);
+      localStorage.setItem("registrationEndTime", endDate.getTime().toString());
+    }
+
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const storedEndTime = parseInt(
+        localStorage.getItem("registrationEndTime")
+      );
+      const difference = storedEndTime - now.getTime();
+
+      if (difference > 0) {
+        setTimeLeft({
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+          minutes: Math.floor((difference / 1000 / 60) % 60),
+          seconds: Math.floor((difference / 1000) % 60),
+        });
+      } else {
+        // Registration period has ended
+        setTimeLeft({
+          days: 0,
+          hours: 0,
+          minutes: 0,
+          seconds: 0,
+        });
+      }
+    };
+
+    const timer = setInterval(calculateTimeLeft, 1000);
+    calculateTimeLeft();
+
+    return () => clearInterval(timer);
+  }, []); // Removed registrationEndTime from dependencies
+
+  // Registration Countdown component
+  const RegistrationCountdown = () => (
+    <div className="registration-countdown">
+      <h3>Tempo até o fim das inscrições iniciais:</h3>
+      <div className="countdown-timer">
+        <div className="countdown-item">
+          <span className="countdown-value">{timeLeft.days}</span>
+          <span className="countdown-label">dias</span>
+        </div>
+        <div className="countdown-separator">:</div>
+        <div className="countdown-item">
+          <span className="countdown-value">
+            {timeLeft.hours.toString().padStart(2, "0")}
+          </span>
+          <span className="countdown-label">horas</span>
+        </div>
+        <div className="countdown-separator">:</div>
+        <div className="countdown-item">
+          <span className="countdown-value">
+            {timeLeft.minutes.toString().padStart(2, "0")}
+          </span>
+          <span className="countdown-label">min</span>
+        </div>
+        <div className="countdown-separator">:</div>
+        <div className="countdown-item">
+          <span className="countdown-value">
+            {timeLeft.seconds.toString().padStart(2, "0")}
+          </span>
+          <span className="countdown-label">seg</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Welcome component
+  const WelcomeMessage = () => (
+    <div className="welcome-message">
+      <div className="welcome-content">
+        <h2>Bem-vindo ao treinamento Solarys!</h2>
+        <p>Sua inscrição foi realizada com sucesso.</p>
+        <div className="sport-icons">
+          <i
+            className={selectedTeam?.icon}
+            style={{
+              fontSize: "2rem",
+              margin: "0 10px",
+              color: selectedTeam?.color,
+            }}
+          ></i>
+        </div>
+        <button onClick={() => setShowWelcome(false)} className="close-button">
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Carregando...</p>
+      </div>
+    );
+  }
+
+  // Update notification component
+  const UpdateNotification = () => {
+    const [showNotification, setShowNotification] = useState(() => {
+      // Check if user has seen the notification before
+      return !localStorage.getItem("hasSeenUpdateNotification");
+    });
+
+    const handleClose = () => {
+      setShowNotification(false);
+      localStorage.setItem("hasSeenUpdateNotification", "true");
+    };
+
+    if (!showNotification) return null;
+
+    return (
+      <div className="update-notification">
+        <div className="update-content">
+          <i className="fas fa-info-circle"></i>
+          <p>
+            <strong>Atualização:</strong> Adaptamos nosso sistema! Se você já
+            realizou sua inscrição, não é necessário enviar novamente. Seu
+            cadastro já está confirmado.
+          </p>
+          <button onClick={handleClose} className="close-update-notification">
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="home">
+      <UpdateNotification />
+      {showWelcome && <WelcomeMessage />}
+      <RegistrationCountdown />
       {/* Font Awesome */}
       <link
         rel="stylesheet"
@@ -314,7 +544,15 @@ function Home() {
       {/* Formulário */}
       {selectedTeam && (
         <div className="content">
-          <EnrollmentForm team={selectedTeam} onGoBack={handleGoBack} />
+          <EnrollmentForm
+            team={selectedTeam}
+            onGoBack={handleGoBack}
+            onSubscriptionSuccess={() => {
+              setShowWelcome(true);
+              setLastSubscriptionTime(new Date());
+              setSelectedTeam(null);
+            }}
+          />
         </div>
       )}
 
@@ -389,6 +627,194 @@ function Home() {
           max-width: 1200px;
           margin: 0 auto;
           padding: 3rem 2rem;
+        }
+
+        /* Welcome Message */
+        .welcome-message {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.8);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .welcome-content {
+          background: #1a1a2e;
+          padding: 2rem;
+          border-radius: 10px;
+          text-align: center;
+          max-width: 90%;
+          width: 500px;
+        }
+
+        .welcome-content h2 {
+          color: #fff;
+          margin-bottom: 1rem;
+        }
+
+        .sport-icons {
+          margin: 1.5rem 0;
+          display: flex;
+          justify-content: center;
+          gap: 1rem;
+        }
+
+        .close-button {
+          background: #3b82f6;
+          color: white;
+          border: none;
+          padding: 0.5rem 1.5rem;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 1rem;
+          margin-top: 1rem;
+          transition: background 0.3s;
+        }
+
+        .close-button:hover {
+          background: #2563eb;
+        }
+
+        /* Registration Countdown */
+        .registration-countdown {
+          background: #1a1a2e;
+          border-radius: 10px;
+          padding: 1.5rem;
+          margin: 1rem auto;
+          max-width: 800px;
+          text-align: center;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        .registration-countdown h3 {
+          margin: 0 0 1rem 0;
+          color: #fff;
+          font-size: 1.2rem;
+        }
+
+        .countdown-timer {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .countdown-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 60px;
+        }
+
+        .countdown-value {
+          font-size: 2rem;
+          font-weight: bold;
+          color: #8b5cf6;
+          line-height: 1;
+        }
+
+        .countdown-label {
+          font-size: 0.8rem;
+          color: #a1a1aa;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .countdown-separator {
+          font-size: 2rem;
+          font-weight: bold;
+          color: #4b5563;
+          margin: 0 -0.5rem;
+          line-height: 1;
+        }
+
+        /* Update Notification */
+        .update-notification {
+          background: #1a1a2e;
+          border-left: 4px solid #8b5cf6;
+          padding: 1rem;
+          margin-bottom: 1rem;
+        }
+
+        .update-content {
+          max-width: 1200px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          color: #e2e8f0;
+        }
+
+        .update-content i {
+          color: #8b5cf6;
+          font-size: 1.5rem;
+          flex-shrink: 0;
+        }
+
+        .update-content p {
+          margin: 0;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+
+        .update-content strong {
+          color: #fff;
+          font-weight: 600;
+        }
+
+        .close-update-notification {
+          background: none;
+          border: none;
+          color: #a1a1aa;
+          cursor: pointer;
+          padding: 0.5rem;
+          margin-left: auto;
+          font-size: 1.2rem;
+          transition: color 0.2s;
+        }
+
+        .close-update-notification:hover {
+          color: #fff;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: #0a0a14;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+        }
+
+        .loading-spinner {
+          width: 50px;
+          height: 50px;
+          border: 5px solid rgba(255, 255, 255, 0.1);
+          border-radius: 50%;
+          border-top-color: #3b82f6;
+          animation: spin 1s ease-in-out infinite;
+          margin-bottom: 1rem;
+        }
+
+        .loading-screen p {
+          color: #fff;
+          font-size: 1.2rem;
+          margin-top: 1rem;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         .banner {
