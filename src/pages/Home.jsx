@@ -1014,15 +1014,38 @@ function Home() {
         
         .form-actions {
             display: flex;
-            justify-content: flex-start;
+            justify-content: space-between;
             gap: 1rem;
-            margin-top: 2rem;
+            margin: 2rem 0;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0 1rem;
         }
         
         .form-actions button {
-            padding: 0.75rem 2rem;
+            padding: 0.75rem 1.5rem;
             border-radius: 10px;
             font-size: 1.1rem;
+            flex: 1;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        @media (max-width: 480px) {
+            .form-actions {
+                flex-direction: column;
+                gap: 0.75rem;
+                padding: 0;
+            }
+            
+            .form-actions button {
+                width: 100%;
+                margin: 0;
+                padding: 0.75rem 1rem;
+            }
+        }
+        
+        .form-actions button {
             cursor: pointer;
             transition: all 0.3s ease;
         }
