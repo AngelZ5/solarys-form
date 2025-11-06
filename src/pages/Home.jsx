@@ -250,21 +250,6 @@ function Home() {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [lastSubscriptionTime, setLastSubscriptionTime] = useState(null);
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  // Initialize the end time in localStorage if it doesn't exist
-  useEffect(() => {
-    if (!localStorage.getItem("registrationEndTime")) {
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 5);
-      localStorage.setItem("registrationEndTime", endDate.getTime().toString());
-    }
-  }, []);
 
   useEffect(() => {
     // Check if all assets are loaded
@@ -317,79 +302,6 @@ function Home() {
     setSelectedTeam(null);
   };
 
-  // Countdown Timer component
-  useEffect(() => {
-    // Check if we have a stored end time, if not, set one
-    if (!localStorage.getItem("registrationEndTime")) {
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 5);
-      localStorage.setItem("registrationEndTime", endDate.getTime().toString());
-    }
-
-    const calculateTimeLeft = () => {
-      const now = new Date();
-      const storedEndTime = parseInt(
-        localStorage.getItem("registrationEndTime")
-      );
-      const difference = storedEndTime - now.getTime();
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60),
-        });
-      } else {
-        // Registration period has ended
-        setTimeLeft({
-          days: 0,
-          hours: 0,
-          minutes: 0,
-          seconds: 0,
-        });
-      }
-    };
-
-    const timer = setInterval(calculateTimeLeft, 1000);
-    calculateTimeLeft();
-
-    return () => clearInterval(timer);
-  }, []); // Removed registrationEndTime from dependencies
-
-  // Registration Countdown component
-  const RegistrationCountdown = () => (
-    <div className="registration-countdown">
-      <h3>Tempo até o fim das inscrições iniciais:</h3>
-      <div className="countdown-timer">
-        <div className="countdown-item">
-          <span className="countdown-value">{timeLeft.days}</span>
-          <span className="countdown-label">dias</span>
-        </div>
-        <div className="countdown-separator">:</div>
-        <div className="countdown-item">
-          <span className="countdown-value">
-            {timeLeft.hours.toString().padStart(2, "0")}
-          </span>
-          <span className="countdown-label">horas</span>
-        </div>
-        <div className="countdown-separator">:</div>
-        <div className="countdown-item">
-          <span className="countdown-value">
-            {timeLeft.minutes.toString().padStart(2, "0")}
-          </span>
-          <span className="countdown-label">min</span>
-        </div>
-        <div className="countdown-separator">:</div>
-        <div className="countdown-item">
-          <span className="countdown-value">
-            {timeLeft.seconds.toString().padStart(2, "0")}
-          </span>
-          <span className="countdown-label">seg</span>
-        </div>
-      </div>
-    </div>
-  );
 
   // Welcome component
   const WelcomeMessage = () => (
@@ -459,7 +371,6 @@ function Home() {
     <div className="home">
       <UpdateNotification />
       {showWelcome && <WelcomeMessage />}
-      <RegistrationCountdown />
       {/* Font Awesome */}
       <link
         rel="stylesheet"
